@@ -321,15 +321,15 @@ The repository serves as an excellent foundation for building advanced AI assist
 
 # 👨‍💻 Author & Contact
 
-**Author:** Your Name
+**Author:** Akash Singh
 
-📧 Email: your.email@example.com
+📧 Email: akash0112002@gmail.com
 
-💼 LinkedIn: https://linkedin.com/in/your-profile
+💼 LinkedIn:
 
-💻 GitHub: https://github.com/your-username
+💻 GitHub:
 
-🌐 Portfolio: https://your-portfolio.com
+🌐 Portfolio:
 
 ---
 
