@@ -1,7 +1,7 @@
 import uuid
 import streamlit as st
-from langgraph_backend import chatbot
-from langchain_core.messages import HumanMessage
+from langgraph_backend import chatbot, model
+from langchain_core.messages import HumanMessage, SystemMessage
 
 
 # ******************************************************* Utility Functions ************************************************************
@@ -12,20 +12,34 @@ def thread_id_generator():
 
 
 def new_chat():
-    # thread_id = thread_id_generator()
     st.session_state['thread_id'] = None
-    # add_thread(st.session_state['thread_id'])
     st.session_state['message_history'] = []
 
 
-def add_thread(thread_id):
+def add_thread(thread_id, title="New Chat"):
     if thread_id not in st.session_state['chat_threads']:
         st.session_state['chat_threads'].append(thread_id)
+        st.session_state['chat_titles'][thread_id] = title
 
 
 def load_thread_chat(thread_id):
     state = chatbot.get_state(config={'configurable': {'thread_id': thread_id}})
     return state.values.get('message', [])
+
+
+def generate_chat_title(user_message: str) -> str:
+    title_prompt = [
+    SystemMessage(content=(
+                "You are a strict title extraction tool. Summarize the core topic of the user's input "
+                "into a 3-5 word general title do not based on any specific given inpupts."
+                "Do not add outside context, do not assume intentions, and do not "
+                "add words not implied by the text. Return ONLY the plain text title. No quotes, no intro."
+            )),        
+            HumanMessage(content=user_message)
+    ]
+    response = model.invoke(title_prompt)
+    return response.content.strip().strip('"\'')
+
 
 # ******************************************************* Session State Setup **********************************************************
 
@@ -38,6 +52,9 @@ if 'thread_id' not in st.session_state:
 
 if 'chat_threads' not in st.session_state:
     st.session_state['chat_threads'] = []
+
+if 'chat_titles' not in st.session_state:
+    st.session_state['chat_titles'] = {}
 
 # add_thread(st.session_state['thread_id'])
 
@@ -52,7 +69,8 @@ st.sidebar.header('My Conversation')
 
 # st.sidebar.text(st.session_state['thread_id'])
 for thread_id in reversed(st.session_state['chat_threads']):
-    if st.sidebar.button(str(thread_id)):
+    title = st.session_state['chat_titles'].get(thread_id, str(thread_id))
+    if st.sidebar.button(title, key = str(thread_id)):
         st.session_state['thread_id'] = thread_id
         messages = load_thread_chat(thread_id)
 
@@ -80,6 +98,7 @@ for message in st.session_state['message_history']:
 #  {'role': 'assistent', 'content': 'Hello'}]
 
 user_input = st.chat_input('Type here')
+
 if user_input:
 
     # first store the message in message history
@@ -87,22 +106,32 @@ if user_input:
     with st.chat_message('user'):
         st.text(user_input)
 
+    # track if this is the first message
+    is_new_thread = False  
+
     # Create a new thread only when the first message is sent.
     if st.session_state['thread_id'] is None:
         thread_id = thread_id_generator()
         st.session_state['thread_id'] = thread_id
-        add_thread(thread_id)
+        title = generate_chat_title(user_input)
+        add_thread(thread_id, title)
+        is_new_thread = True
 
     CONFIG = {'configurable': {'thread_id': st.session_state['thread_id']}}
 
     # first store the message in message history
     with st.chat_message('assistant'):
         ai_message = st.write_stream(
-            message_chunk.content for message_chunk, metadata in chatbot.stream(
+            message_chunk.content 
+            for message_chunk, metadata in chatbot.stream(
                 {'message': [HumanMessage(content=user_input)]}, 
                 config=CONFIG,
                 stream_mode='messages'
-
             )
+            # generator filter empty content
+            if message_chunk.content 
         )
     st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
+
+    if is_new_thread:
+        st.rerun()

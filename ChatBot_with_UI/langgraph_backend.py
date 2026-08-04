@@ -6,9 +6,7 @@ from langchain_core.messages import BaseMessage, HumanMessage
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import InMemorySaver
 
-from dotenv import load_dotenv
-load_dotenv("/home/srestha/Desktop/Langraph/.env")
-
+load_dotenv()
 
 class ChatState(TypedDict):
 

@@ -277,6 +277,8 @@ You can similarly execute any workflow inside the **LangGraph_Model** directory.
 
 ```bash
 streamlit run ChatBot_with_UI/streamlit_frontend_streaming.py
+or
+streamlit run ChatBot_with_UI/streamlit_frontend_streaming.py --server.fileWatcherType none
 ```
 
 Alternatively,
