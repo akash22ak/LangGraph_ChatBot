@@ -11,7 +11,6 @@ from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 load_dotenv()
 
 class ChatState(TypedDict):
-
     message: Annotated[list[BaseMessage], add_messages]
 
 
@@ -23,7 +22,6 @@ llm = HuggingFaceEndpoint(
 model = ChatHuggingFace(llm=llm)
 
 def chat_node(state: ChatState):
-
     message = state["message"]
     response = model.invoke(message)
     return {"message": [response]}
@@ -38,9 +36,30 @@ graph.add_edge("chat_node",  END)
 
 chatbot = graph.compile(checkpointer=checkpointer)
 
+
+# ── Title persistence ──────────────────────────────────────────
+
+def setup_titles_table():
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS chat_titles (
+        thread_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL)
+    """)
+    conn.commit()
+
+def save_thread_title(thread_id: str, title: str):
+    conn.execute("INSERT INTO chat_titles (thread_id, title) VALUES (?, ?)", (str(thread_id), title))
+    conn.commit()
+
+def retrieve_all_titles() -> dict:
+    cursor = conn.execute("SELECT thread_id, title FROM chat_titles")
+    return {row[0]: row[1] for row in cursor.fetchall()}
+
 def retrieve_all_threads():
     all_threads = set()
     for checkpoint in checkpointer.list(None):
         all_threads.add(checkpoint.config['configurable']['thread_id'])
 
     return list(all_threads)
+
+setup_titles_table()

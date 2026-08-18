@@ -1,6 +1,6 @@
 import uuid
 import streamlit as st
-from langgraph_database_backend import chatbot, model, retrieve_all_threads
+from langgraph_database_backend import chatbot, model, retrieve_all_threads, save_thread_title, retrieve_all_titles
 from langchain_core.messages import HumanMessage, SystemMessage
 
 
@@ -54,7 +54,7 @@ if 'chat_threads' not in st.session_state:
     st.session_state['chat_threads'] = retrieve_all_threads()
 
 if 'chat_titles' not in st.session_state:
-    st.session_state['chat_titles'] = {}
+    st.session_state['chat_titles'] = retrieve_all_titles()
 
 # add_thread(st.session_state['thread_id'])
 
@@ -118,6 +118,7 @@ if user_input:
         thread_id = thread_id_generator()
         st.session_state['thread_id'] = thread_id
         title = generate_chat_title(user_input)
+        save_thread_title(thread_id, title),
         add_thread(thread_id, title)
         is_new_thread = True
 

@@ -277,8 +277,6 @@ You can similarly execute any workflow inside the **LangGraph_Model** directory.
 
 ```bash
 streamlit run ChatBot_with_UI/streamlit_frontend_streaming.py
-or
-streamlit run ChatBot_with_UI/streamlit_frontend_streaming.py --server.fileWatcherType none
 ```
 
 Alternatively,
@@ -327,7 +325,7 @@ The repository serves as an excellent foundation for building advanced AI assist
 
 📧 Email: akash0112002@gmail.com
 
-💼 LinkedIn:
+💼 LinkedIn: www.linkedin.com/in/akash-singh-995489224
 
 💻 GitHub:
 

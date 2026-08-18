@@ -5,3 +5,8 @@ __pycache__/
 *.log
 .DS_Store
 
+# SQLite Database binaries and runtime logs
+ChatBot.DB
+ChatBot.DB-shm
+ChatBot.DB-wal
+*.bin
