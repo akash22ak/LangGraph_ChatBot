@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 *.log
 .DS_Store
+.vscode/
 
 # SQLite Database binaries and runtime logs
 ChatBot.DB
