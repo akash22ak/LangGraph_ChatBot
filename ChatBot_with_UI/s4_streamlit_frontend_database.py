@@ -1,6 +1,6 @@
 import uuid
 import streamlit as st
-from langgraph_database_backend import chatbot, model, retrieve_all_threads, save_thread_title, retrieve_all_titles
+from ChatBot_with_UI.l2_langgraph_database_backend import chatbot, model, retrieve_all_threads, save_thread_title, retrieve_all_titles
 from langchain_core.messages import HumanMessage, SystemMessage
 
 
