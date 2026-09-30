@@ -11,3 +11,5 @@ ChatBot.DB
 ChatBot.DB-shm
 ChatBot.DB-wal
 *.bin
+
+test.py
