@@ -1,11 +1,13 @@
 import uuid
 import streamlit as st
 from l2_langgraph_database_backend import (
-    chatbot, 
-    model, 
-    retrieve_all_threads, 
-    save_thread_title, 
-    retrieve_all_titles
+    chatbot,
+    model,
+    retrieve_all_threads,
+    retrieve_all_titles,
+    save_thread_title,
+    rename_thread_title,
+    delete_thread_data,
 )
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessageChunk
 
@@ -16,10 +18,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 # ******************************************************* Utility Functions ************************************************************
 
 def thread_id_generator() -> str:
-    # Always a string, so it matches IDs loaded from the database
     return str(uuid.uuid4())
 
 
@@ -37,7 +39,7 @@ def add_thread(thread_id: str, title="New Chat"):
 
 def load_thread_chat(thread_id: str):
     state = chatbot.get_state(config={'configurable': {'thread_id': str(thread_id)}})
-    return state.values.get('message', [])
+    return state.values.get('messages', [])
 
 
 def fallback_title(user_message: str, max_len: int = 30) -> str:
@@ -62,14 +64,13 @@ def generate_chat_title(user_message: str) -> str:
         title = response.content.strip().strip('"\'')
         return title or fallback_title(user_message)
     except Exception:
-        # Title generation must never block the actual chat
         return fallback_title(user_message)
 
 
 def stream_ai_text(user_input: str, config: dict):
     """Yield only the assistant's text chunks coming from the chat node."""
     for chunk, metadata in chatbot.stream(
-        {'message': [HumanMessage(content=user_input)]},
+        {'messages': [HumanMessage(content=user_input)]},
         config=config,
         stream_mode='messages'
     ):
@@ -81,7 +82,37 @@ def stream_ai_text(user_input: str, config: dict):
             yield chunk.content
 
 
+# ---- Sidebar callbacks -------------------------------------------------------------------
+# Callbacks run *before* the script reruns, so the UI renders the new state in a single pass.
+
+def select_thread(thread_id: str):
+    st.session_state['thread_id'] = thread_id
+    st.session_state['message_history'] = [
+        {
+            'role': 'user' if isinstance(msg, HumanMessage) else 'assistant',
+            'content': msg.content,
+        }
+        for msg in load_thread_chat(thread_id)
+    ]
+
+
+def rename_chat(thread_id: str):
+    new_title = st.session_state.get(f"rename_{thread_id}", "").strip()
+    if new_title:
+        rename_thread_title(thread_id, new_title)
+        st.session_state['chat_titles'][thread_id] = new_title
+
+
+def delete_chat(thread_id: str):
+    delete_thread_data(thread_id)
+    st.session_state['chat_threads'] = [t for t in st.session_state['chat_threads'] if t != thread_id]
+    st.session_state['chat_titles'].pop(thread_id, None)
+    if st.session_state['thread_id'] == thread_id:
+        new_chat()
+
+
 # ******************************************************* Session State Setup **********************************************************
+# The database is read once per browser session, not on every rerun.
 
 if 'message_history' not in st.session_state:
     st.session_state['message_history'] = []
@@ -100,29 +131,34 @@ if 'chat_titles' not in st.session_state:
 
 st.sidebar.title('LangGraph ChatBot')
 
-if st.sidebar.button('New Chat'):
-    new_chat()
+st.sidebar.button('New Chat', on_click=new_chat)
 
 st.sidebar.header('My Conversation')
 
 # chat_threads is ordered oldest -> newest, so reverse for newest first
-for thread_id in reversed(st.session_state['chat_threads']):
-    title = st.session_state['chat_titles'].get(thread_id, "Untitled chat")
-    if st.sidebar.button(title, key=str(thread_id)):
-        st.session_state['thread_id'] = thread_id
-        messages = load_thread_chat(thread_id)
+for tid in reversed(st.session_state['chat_threads']):
+    title = st.session_state['chat_titles'].get(tid, "Untitled chat")
+    is_current = tid == st.session_state['thread_id']
 
-        temp_messages = []
-        for msg in messages:
-            role = 'user' if isinstance(msg, HumanMessage) else 'assistant'
-            temp_messages.append({'role': role, 'content': msg.content})
+    col_title, col_menu = st.sidebar.columns([5, 1])
 
-        st.session_state['message_history'] = temp_messages
+    col_title.button(
+        title,
+        key=f"select_{tid}",
+        on_click=select_thread,
+        args=(tid,),
+        use_container_width=True,
+        type="primary" if is_current else "secondary",
+    )
+
+    with col_menu.popover("⋮"):
+        st.text_input("Rename chat", value=title, key=f"rename_{tid}")
+        st.button("Save name", key=f"save_{tid}", on_click=rename_chat, args=(tid,))
+        st.button("Delete chat", key=f"delete_{tid}", on_click=delete_chat, args=(tid,))
 
 
 # ************************************************************* Main UI ****************************************************************
 
-# Render the current chat history
 for message in st.session_state['message_history']:
     with st.chat_message(message['role']):
         st.markdown(message['content'])
