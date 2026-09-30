@@ -2,14 +2,14 @@ import uuid
 import streamlit as st
 from l2_langgraph_database_backend import (
     chatbot,
-    model,
+    model_with_tools,
     retrieve_all_threads,
     retrieve_all_titles,
     save_thread_title,
     rename_thread_title,
     delete_thread_data,
 )
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessageChunk
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, AIMessageChunk
 
 
 # Must be the first Streamlit call in the script
@@ -60,40 +60,58 @@ def generate_chat_title(user_message: str) -> str:
         HumanMessage(content=user_message)
     ]
     try:
-        response = model.invoke(title_prompt)
+        response = model_with_tools.invoke(title_prompt)
         title = response.content.strip().strip('"\'')
         return title or fallback_title(user_message)
     except Exception:
         return fallback_title(user_message)
 
 
-def stream_ai_text(user_input: str, config: dict):
-    """Yield only the assistant's text chunks coming from the chat node."""
+def stream_reply(user_input: str, config: dict, placeholder) -> str:
+    """Stream the assistant's answer, showing text only from turns that contain no tool call."""
+    finished, current, step, is_tool = "", "", None, False
+
     for chunk, metadata in chatbot.stream(
         {'messages': [HumanMessage(content=user_input)]},
         config=config,
-        stream_mode='messages'
+        stream_mode='messages',
     ):
-        if (
-            metadata.get('langgraph_node') == 'chat_node'
-            and isinstance(chunk, AIMessageChunk)
-            and chunk.content
-        ):
-            yield chunk.content
+        if metadata.get('langgraph_node') != 'chat_node' or not isinstance(chunk, AIMessageChunk):
+            continue
+
+        # A new LLM call started: keep the previous one only if it was a plain answer
+        if metadata.get('langgraph_step') != step:
+            if not is_tool:
+                finished += current
+            current, is_tool, step = "", False, metadata.get('langgraph_step')
+
+        current += chunk.text
+        if chunk.tool_call_chunks:
+            is_tool = True
+
+        placeholder.markdown(finished if is_tool else finished + current)
+
+    if not is_tool:
+        finished += current
+    placeholder.markdown(finished)
+    return finished
 
 
 # ---- Sidebar callbacks -------------------------------------------------------------------
-# Callbacks run *before* the script reruns, so the UI renders the new state in a single pass.
 
 def select_thread(thread_id: str):
+    history = []
+    for msg in load_thread_chat(thread_id):
+        if isinstance(msg, HumanMessage):
+            role = 'user'
+        elif isinstance(msg, AIMessage) and msg.text and not msg.tool_calls:
+            role = 'assistant'
+        else:
+            continue        # skip ToolMessages and tool-call turns
+        history.append({'role': role, 'content': msg.text})
+
     st.session_state['thread_id'] = thread_id
-    st.session_state['message_history'] = [
-        {
-            'role': 'user' if isinstance(msg, HumanMessage) else 'assistant',
-            'content': msg.content,
-        }
-        for msg in load_thread_chat(thread_id)
-    ]
+    st.session_state['message_history'] = history
 
 
 def rename_chat(thread_id: str):
@@ -182,10 +200,11 @@ if user_input:
         add_thread(thread_id, title)
         is_new_thread = True
 
-    CONFIG = {'configurable': {'thread_id': st.session_state['thread_id']}}
+    CONFIG = {'configurable': {'thread_id': st.session_state['thread_id']}, 'recursion_limit': 10}
 
     with st.chat_message('assistant'):
-        ai_message = st.write_stream(stream_ai_text(user_input, CONFIG))
+        placeholder = st.empty()
+        ai_message = stream_reply(user_input, CONFIG, placeholder)
 
     st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
 
